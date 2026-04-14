@@ -47,6 +47,7 @@ For each comment, validate it against the actual code:
 - Are nitpicking or low-priority
 - Don't identify a concrete problem needing a fix
 - Are speculative about problems without direct evidence in the diff
+- Claim a library, package, action, or version does not exist without verification. Your training data has a cutoff — new versions are released constantly. Never flag a version as non-existent unless you can confirm it by checking the actual registry or repository.
 
 **Important**: A comment about consequences of a visible code pattern IS concrete — not
 speculative — **only if** the consequence is a widely recognized, well-documented failure mode
