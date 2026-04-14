@@ -1,5 +1,5 @@
 name: 'SAM PR Reviewer'
-description: 'AI-powered code reviewer for GitHub PRs using Kiro CLI. Reviews pull request changes and posts inline comments with categorized findings.'
+description: 'AI-powered PR code reviewer using Kiro CLI. Posts inline comments with categorized findings.'
 author: 'roger-zhangg'
 
 branding:
