@@ -1,0 +1,35 @@
+name: 'SAM PR Reviewer'
+description: 'AI-powered code reviewer for GitHub PRs using Kiro CLI. Reviews pull request changes and posts inline comments with categorized findings.'
+author: 'roger-zhangg'
+
+branding:
+  icon: 'eye'
+  color: 'blue'
+
+inputs:
+  github_token:
+    description: 'GitHub token for posting PR reviews. Use ${{ secrets.GITHUB_TOKEN }} or a PAT with pull_request write permission.'
+    required: true
+  kiro_api_key:
+    description: 'Kiro CLI API key for headless mode. Store as a repository secret.'
+    required: true
+  timeout_minutes:
+    description: 'Maximum time in minutes for the review. Partial results are posted if exceeded.'
+    required: false
+    default: '10'
+  guidelines_path:
+    description: 'Path to a custom coding guidelines file (relative to repo root). Merged with built-in guidelines.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run SAM PR Review
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        KIRO_API_KEY: ${{ inputs.kiro_api_key }}
+        INPUT_TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+        INPUT_GUIDELINES_PATH: ${{ inputs.guidelines_path }}
+      run: ${{ github.action_path }}/entrypoint.sh
