@@ -160,7 +160,8 @@ if [ -s "$KIRO_STDERR_LOG" ]; then
   echo "::endgroup::"
 fi
 
-# --- Post review to GitHub PR ---
+# --- Post review to GitHub PR (KIRO_API_KEY no longer needed) ---
+unset KIRO_API_KEY
 echo "Posting review to PR #${PR_NUMBER}..."
 export GITHUB_TOKEN
 python3 "${ACTION_DIR}/scripts/post_review.py" \
