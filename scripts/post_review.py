@@ -41,8 +41,7 @@ def extract_review(text):
     idx = text.rfind(marker)
     if idx != -1:
         return text[idx:]
-    # Fallback: return everything if no marker found
-    return text
+    return "## Code Review Results\n⚠️ Review output could not be parsed. Check the action logs."
 
 
 SECRET_PATTERNS = [

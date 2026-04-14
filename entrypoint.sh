@@ -67,10 +67,11 @@ d = json.load(sys.stdin)
 for f in d.get('files', []):
     print(f)
 " < "${REVIEW_DIR}/diff/summary.json" | while IFS= read -r filepath; do
-  safe_name=$(echo "$filepath" | tr '/' '_')
+  safe_name=$(echo "$filepath" | tr -c 'a-zA-Z0-9._-' '_')
   python3 "${ACTION_DIR}/scripts/parse_diff.py" \
     --file "$filepath" --from "$BASE_SHA" --to "$HEAD_SHA" \
-    > "${REVIEW_DIR}/diff/file_${safe_name}.json" 2>/dev/null || true
+    > "${REVIEW_DIR}/diff/file_${safe_name}.json" 2>/dev/null || \
+    echo "::warning::Failed to parse diff for: $filepath"
 done
 
 # Also generate full diff for small PRs
