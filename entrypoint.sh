@@ -32,31 +32,41 @@ echo "Diff: ${BASE_SHA}..${HEAD_SHA}"
 echo "Installing Kiro CLI..."
 KIRO_INSTALL_SCRIPT=$(mktemp)
 curl -fsSL https://cli.kiro.dev/install -o "$KIRO_INSTALL_SCRIPT"
-# TODO: pin checksum once a stable release is available
-# echo "EXPECTED_SHA256  $KIRO_INSTALL_SCRIPT" | sha256sum -c -
 bash "$KIRO_INSTALL_SCRIPT"
 rm -f "$KIRO_INSTALL_SCRIPT"
 export PATH="$HOME/.local/bin:$PATH"
 
-# --- Prepare the review prompt (written to file, not shell variable) ---
+# --- Set up agent in the repo's .kiro/agents/ directory ---
 ACTION_DIR="${GITHUB_ACTION_PATH}"
-SKILL_DIR="${ACTION_DIR}"
+mkdir -p .kiro/agents
+cp "${ACTION_DIR}/.kiro/agents/code-reviewer.json" .kiro/agents/code-reviewer.json
+
+# --- Copy scripts and references into the workspace ---
+cp -r "${ACTION_DIR}/scripts" .sam-pr-reviewer-scripts
+cp -r "${ACTION_DIR}/references" .sam-pr-reviewer-references
+cp "${ACTION_DIR}/SKILL.md" .sam-pr-reviewer-SKILL.md
+
+# --- Build the prompt ---
 PROMPT_FILE=$(mktemp)
 
 cat > "$PROMPT_FILE" <<PROMPT_EOF
 Review the pull request changes in this repository.
 
+IMPORTANT: Read the file .sam-pr-reviewer-SKILL.md for full review instructions.
+Read .sam-pr-reviewer-references/review-pipeline.md for the 5-pass pipeline.
+Read .sam-pr-reviewer-references/coding-guidelines.md for the coding guidelines.
+
 Use the diff parser to get structured diff data:
-  python3 ${SKILL_DIR}/scripts/parse_diff.py --from ${BASE_SHA} --to ${HEAD_SHA}
+  python3 .sam-pr-reviewer-scripts/parse_diff.py --from ${BASE_SHA} --to ${HEAD_SHA}
 
 For large diffs, use --summary first, then --file for each file:
-  python3 ${SKILL_DIR}/scripts/parse_diff.py --summary --from ${BASE_SHA} --to ${HEAD_SHA}
-  python3 ${SKILL_DIR}/scripts/parse_diff.py --file <path> --from ${BASE_SHA} --to ${HEAD_SHA}
+  python3 .sam-pr-reviewer-scripts/parse_diff.py --summary --from ${BASE_SHA} --to ${HEAD_SHA}
+  python3 .sam-pr-reviewer-scripts/parse_diff.py --file <path> --from ${BASE_SHA} --to ${HEAD_SHA}
 
-Follow the review pipeline in the agent instructions. Output your review in the exact format specified.
+Follow the review pipeline in the instructions. Output your review in the exact format specified in SKILL.md.
 PROMPT_EOF
 
-# --- Append custom guidelines (with path traversal guard) ---
+# Append custom guidelines path if provided
 if [ -n "$GUIDELINES_PATH" ]; then
   RESOLVED_PATH=$(realpath -m "$GUIDELINES_PATH" 2>/dev/null || true)
   WORKSPACE=$(realpath "$GITHUB_WORKSPACE")
@@ -83,7 +93,7 @@ set +e
 timeout "${TIMEOUT_SECONDS}" kiro-cli chat \
   --no-interactive \
   --trust-all-tools \
-  --agent "${SKILL_DIR}/.kiro/agents/code-reviewer.json" \
+  --agent code-reviewer \
   "$(cat "$PROMPT_FILE")" \
   > "$REVIEW_OUTPUT_FILE" 2>"$KIRO_STDERR_LOG"
 EXIT_CODE=$?
@@ -106,11 +116,13 @@ fi
 # --- Post review to GitHub PR ---
 echo "Posting review to PR #${PR_NUMBER}..."
 export GITHUB_TOKEN
-python3 "${SKILL_DIR}/scripts/post_review.py" \
+python3 "${ACTION_DIR}/scripts/post_review.py" \
   --repo "$REPO_FULL" \
   --pr "$PR_NUMBER" \
   --commit "$HEAD_SHA" \
   --review-file "$REVIEW_OUTPUT_FILE"
 
+# --- Cleanup ---
 rm -f "$REVIEW_OUTPUT_FILE" "$PROMPT_FILE" "$KIRO_STDERR_LOG"
+rm -rf .sam-pr-reviewer-scripts .sam-pr-reviewer-references .sam-pr-reviewer-SKILL.md
 echo "Done."
