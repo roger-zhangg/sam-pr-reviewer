@@ -82,8 +82,9 @@ TIMEOUT_SECONDS=$((TIMEOUT_MINUTES * 60))
 set +e
 timeout "${TIMEOUT_SECONDS}" kiro-cli chat \
   --no-interactive \
+  --trust-all-tools \
   --agent "${SKILL_DIR}/.kiro/agents/code-reviewer.json" \
-  --prompt-file "$PROMPT_FILE" \
+  "$(cat "$PROMPT_FILE")" \
   > "$REVIEW_OUTPUT_FILE" 2>"$KIRO_STDERR_LOG"
 EXIT_CODE=$?
 set -e
