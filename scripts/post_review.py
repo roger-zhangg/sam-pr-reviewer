@@ -62,6 +62,22 @@ def extract_review(text):
     return "## Code Review Results\n⚠️ Review output could not be parsed. Check the action logs."
 
 
+CODEBLOCK_TAG = re.compile(
+    r'<codeblock(?:\s+lang="([^"]*)")?\s*>(.*?)</codeblock>',
+    re.DOTALL,
+)
+INLINE_CODE_TAG = re.compile(r'<code>(.*?)</code>', re.DOTALL)
+
+
+def convert_xml_to_markdown(text):
+    """Convert XML-style code tags back to GitHub-flavored markdown."""
+    text = CODEBLOCK_TAG.sub(lambda m: f"```{m.group(1) or ''}\n{m.group(2).strip()}\n```", text)
+    text = INLINE_CODE_TAG.sub(r'`\1`', text)
+    # Also strip box-drawing separator lines
+    text = re.sub(r'\n?━+\n?', '\n', text)
+    return text
+
+
 SECRET_PATTERNS = [
     re.compile(r"ksk_[A-Za-z0-9]{20,}"),                          # Kiro API key
     re.compile(r"ghp_[A-Za-z0-9]{36,}"),                          # GitHub PAT
@@ -192,6 +208,7 @@ def post_review(repo, pr_number, commit_sha, token, review_text):
     """Post a PR review with inline comments."""
     review_text = strip_ansi(review_text)
     review_text = extract_review(review_text)
+    review_text = convert_xml_to_markdown(review_text)
     review_text = sanitize_review_text(review_text)
     comments = parse_review(review_text)
 

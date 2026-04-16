@@ -147,47 +147,16 @@ REVIEW_OUTPUT_FILE=$(mktemp)
 KIRO_STDERR_LOG=$(mktemp)
 TIMEOUT_SECONDS=$((TIMEOUT_MINUTES * 60))
 
-# Use a dedicated session dir so we can find the session file after
-SESSION_DIR=$(mktemp -d)
-
 set +e
-KIRO_SESSIONS_DIR="$SESSION_DIR" TERM=dumb NO_COLOR=1 KIRO_LOG_NO_COLOR=1 timeout "${TIMEOUT_SECONDS}" kiro-cli chat \
+TERM=dumb NO_COLOR=1 KIRO_LOG_NO_COLOR=1 timeout "${TIMEOUT_SECONDS}" kiro-cli chat \
   --no-interactive \
   --trust-tools=read,grep,glob,code \
   --wrap never \
   --agent code-reviewer \
   "$(cat "$PROMPT_FILE")" \
-  > /dev/null 2>"$KIRO_STDERR_LOG"
+  > "$REVIEW_OUTPUT_FILE" 2>"$KIRO_STDERR_LOG"
 EXIT_CODE=$?
 set -e
-
-# Extract raw markdown from the saved session file (last assistant message)
-python3 -c "
-import json, glob, sys, os
-files = sorted(glob.glob(os.path.join('$SESSION_DIR', '**/*.json', ), recursive=True), key=os.path.getmtime, reverse=True)
-if not files:
-    # Fallback: try default session location
-    home = os.path.expanduser('~')
-    files = sorted(glob.glob(os.path.join(home, '.kiro', 'sessions', '**/*.json'), recursive=True), key=os.path.getmtime, reverse=True)
-for f in files[:3]:
-    try:
-        data = json.load(open(f))
-        messages = data if isinstance(data, list) else data.get('messages', data.get('conversation', []))
-        for msg in reversed(messages):
-            content = msg.get('content', '') or msg.get('message', '') or msg.get('text', '')
-            if isinstance(content, list):
-                content = ' '.join(c.get('text', '') for c in content if isinstance(c, dict))
-            if '## Code Review Results' in str(content):
-                # Extract from the marker onwards
-                idx = str(content).rfind('## Code Review Results')
-                print(str(content)[idx:])
-                sys.exit(0)
-    except (json.JSONDecodeError, KeyError, TypeError):
-        continue
-print('## Code Review Results\n⚠️ Could not extract review from session file.', file=sys.stdout)
-" > "$REVIEW_OUTPUT_FILE"
-
-echo "Extracted review: $(wc -c < "$REVIEW_OUTPUT_FILE") bytes"
 
 if [ $EXIT_CODE -eq 124 ]; then
   echo "::warning::Review timed out after ${TIMEOUT_MINUTES} minutes. Posting partial results."
@@ -215,5 +184,5 @@ python3 "${ACTION_DIR}/scripts/post_review.py" \
 
 # --- Cleanup ---
 rm -f "$REVIEW_OUTPUT_FILE" "$PROMPT_FILE" "$KIRO_STDERR_LOG"
-rm -rf "${REVIEW_DIR}" .kiro/agents/code-reviewer.json "$SESSION_DIR"
+rm -rf "${REVIEW_DIR}" .kiro/agents/code-reviewer.json
 echo "Done."

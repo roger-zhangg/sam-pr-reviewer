@@ -122,6 +122,17 @@ Comment text MUST be valid GitHub-flavored markdown. Use:
 - Bold, bullet points, and paragraphs for structure
 - Do NOT use ANSI escape codes, terminal formatting, or raw control characters
 
+CRITICAL OUTPUT RULE: Because the output passes through a terminal renderer that strips
+triple-backtick fences, you MUST use XML-style code block tags instead:
+- Use <codeblock lang="python"> and </codeblock> instead of ```python and ```
+- Use <code> and </code> instead of single backticks for inline code
+- The post-processing script will convert these back to proper markdown
+- Example:
+  <codeblock lang="python">
+  def example():
+      return True
+  </codeblock>
+
 If no issues found:
 ```
 ## Code Review Results
