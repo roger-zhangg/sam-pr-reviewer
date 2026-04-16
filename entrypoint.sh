@@ -148,9 +148,10 @@ KIRO_STDERR_LOG=$(mktemp)
 TIMEOUT_SECONDS=$((TIMEOUT_MINUTES * 60))
 
 set +e
-timeout "${TIMEOUT_SECONDS}" kiro-cli chat \
+NO_COLOR=1 KIRO_LOG_NO_COLOR=1 timeout "${TIMEOUT_SECONDS}" kiro-cli chat \
   --no-interactive \
   --trust-tools=read,grep,glob,code \
+  --wrap never \
   --agent code-reviewer \
   "$(cat "$PROMPT_FILE")" \
   > "$REVIEW_OUTPUT_FILE" 2>"$KIRO_STDERR_LOG"
