@@ -31,6 +31,24 @@ def strip_ansi(text):
     return ANSI_ESCAPE.sub("", text)
 
 
+# Pattern for code blocks that lost their fences during terminal rendering.
+# Kiro renders ```python\ncode\n``` as just "python\ncode\n" with possible
+# surrounding box-drawing characters (━).
+BARE_CODE_BLOCK = re.compile(
+    r"(?m)^(python|javascript|typescript|java|yaml|bash|json|go|rust|ruby|c|cpp|csharp|shell|sql|html|css|xml|toml|hcl|dockerfile)\n(.*?)(?=\n━|\n\n[A-Z]|\n####|\Z)",
+    re.DOTALL,
+)
+
+
+def restore_code_fences(text):
+    """Re-wrap bare code blocks that lost their triple-backtick fences."""
+    def replacer(m):
+        lang = m.group(1)
+        code = m.group(2).rstrip()
+        return f"```{lang}\n{code}\n```"
+    return BARE_CODE_BLOCK.sub(replacer, text)
+
+
 def extract_review(text):
     """Extract the final '## Code Review Results' section from kiro-cli output.
 
@@ -79,8 +97,9 @@ def parse_review(text):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
 
-        # Remove trailing --- separator
+        # Remove trailing --- separator and box-drawing lines
         body = re.sub(r"\n---\s*$", "", body).strip()
+        body = re.sub(r"\n?━+\n?", "", body).strip()
 
         if body:
             comments.append({
@@ -172,6 +191,7 @@ def get_diff_lines(token, repo, pr_number, commit_sha):
 def post_review(repo, pr_number, commit_sha, token, review_text):
     """Post a PR review with inline comments."""
     review_text = strip_ansi(review_text)
+    review_text = restore_code_fences(review_text)
     review_text = extract_review(review_text)
     review_text = sanitize_review_text(review_text)
     comments = parse_review(review_text)
