@@ -6,18 +6,21 @@ Automatically reviews PR diffs and posts inline comments with categorized findin
 
 ## Features
 
-- **Inline PR comments** — findings are posted directly on the relevant lines in your PR
+- **Inline PR comments** — findings posted directly on the relevant lines
 - **5-pass review pipeline** — generate → deduplicate → confidence check → guideline compliance → refine
 - **12 finding categories** — BUG, SECURITY, ERROR_HANDLING, INPUT_VALIDATION, PERFORMANCE, CONCURRENCY, RESOURCE_MANAGEMENT, NAMING, STYLE, DOCUMENTATION, TESTING, GENERAL
-- **Configurable timeout** — partial results are posted if the review exceeds the time limit
+- **Cross-file context** — reads source files from the repo to verify findings (e.g., checking class hierarchies)
+- **Configurable timeout** — partial results posted if the review exceeds the time limit
+- **Auto-dismiss** — previous review comments are cleaned up before each new review
 - **Custom guidelines** — bring your own coding guidelines to supplement the built-in ones
 - **Custom rules** — add a `kiro-review.yaml` to your repo for project-specific review rules
+- **Fork-safe** — uses `pull_request_target` to review PRs from forks without exposing secrets
 
 ## Quick Start
 
 ### 1. Get a Kiro API Key
 
-[Sign in to Kiro](https://app.kiro.dev) and generate an API key from your account settings.
+[Sign in to Kiro](https://app.kiro.dev) and generate an API key from your account settings. Requires a Kiro Pro, Pro+, or Power subscription.
 
 ### 2. Add Secrets
 
@@ -31,13 +34,13 @@ The `GITHUB_TOKEN` is automatically available — no setup needed.
 
 ### 3. Create the Workflow
 
-Add `.github/workflows/sam-pr-reviewer.yml` to your repository:
+Add `.github/workflows/ai-code-review.yml` to your repository:
 
 ```yaml
-name: SAM PR Review
+name: AI Code Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -52,13 +55,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch PR head
+        run: git fetch origin "$PR_HEAD_SHA"
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
       - uses: roger-zhangg/sam-pr-reviewer@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           kiro_api_key: ${{ secrets.KIRO_API_KEY }}
 ```
 
-That's it. Every PR will now get an AI code review.
+Every PR will now get an AI code review.
+
+**Why `pull_request_target`?** This trigger runs the workflow with the base repo's permissions, allowing the action to post review comments on PRs from forks. The workspace is checked out from the base branch (trusted), and only the git diff is used for review — fork code is never checked out onto disk.
 
 ## Inputs
 
@@ -68,6 +78,7 @@ That's it. Every PR will now get an AI code review.
 | `kiro_api_key` | Yes | — | Kiro CLI API key for headless mode |
 | `timeout_minutes` | No | `10` | Max review time in minutes. Partial results posted on timeout. |
 | `guidelines_path` | No | — | Path to custom guidelines file (relative to repo root) |
+| `dismiss_previous` | No | `true` | Delete previous SAM PR Reviewer comments before posting new review |
 
 ## Custom Guidelines
 
@@ -104,26 +115,34 @@ custom-rules:
 
 ## How It Works
 
-1. **Checkout** — the action checks out your PR with full git history
-2. **Install** — installs Kiro CLI in headless mode using your API key
-3. **Parse** — extracts structured diff data between the PR base and head commits
-4. **Review** — Kiro CLI runs a 5-pass review pipeline:
+1. **Checkout** — checks out the base branch (trusted) with full git history
+2. **Fetch** — fetches the PR head commit for diffing (fork code is never checked out)
+3. **Install** — installs Kiro CLI in headless mode using your API key
+4. **Parse** — pre-generates structured diff JSON between base and head commits
+5. **Review** — Kiro CLI (Claude Opus 4.6) runs a 5-pass review pipeline:
    - **Pass 1**: Generate initial comments from diff analysis
    - **Pass 2**: Deduplicate similar findings
-   - **Pass 3**: Confidence check — discard speculative or incorrect comments
+   - **Pass 3**: Confidence check — read source files to verify, discard incorrect comments
    - **Pass 4**: Guideline compliance — verify against coding standards
    - **Pass 5**: Refine — polish comments with clear explanations and code examples
-5. **Post** — findings are posted as a PR review with inline comments on the relevant lines
-
-## Timeout Behavior
-
-If the review exceeds `timeout_minutes`, the action posts whatever findings have been produced so far, with a note that the review was partial. This ensures you always get feedback, even on large PRs.
+6. **Post** — findings posted as a PR review with inline comments on the relevant lines
 
 ## Security
 
-- The action treats all PR code as **untrusted** — it only reads and analyzes code, never executes it
-- Reviews are posted as `COMMENT` (never `APPROVE` or `REQUEST_CHANGES`) — the AI won't block your merges
-- Your Kiro API key is passed via GitHub secrets and never exposed in logs
+This action is designed to run safely against untrusted PRs from forks.
+
+| Concern | Mitigation |
+|---|---|
+| Fork code execution | Workspace is base branch only. Fork code is never on disk. Diffs are pre-parsed. |
+| Shell injection | Agent has no shell access. Only read-only tools (read, grep, glob, code) are available. |
+| Secret exfiltration | `KIRO_API_KEY` is unset before posting. Review text is sanitized for secret patterns before posting. |
+| Prompt injection via PR content | Agent instructed to ignore config files from PR diff. No shell to exfiltrate data. |
+| GitHub token scope | `pull-requests: write` only. Reviews posted as `COMMENT` (never `APPROVE` or `REQUEST_CHANGES`). |
+| Expression injection | All GitHub context values passed via `env:` blocks, not inline `${{ }}` in `run:` steps. |
+
+## Timeout Behavior
+
+If the review exceeds `timeout_minutes`, the action posts whatever findings have been produced so far, with a note that the review was partial. If `KIRO_API_KEY` is not set, the action skips gracefully with a warning.
 
 ## License
 
