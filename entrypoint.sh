@@ -83,9 +83,7 @@ fi
 
 # --- Generate project directory tree ---
 echo "Generating project structure..."
-find . -not -path './.git/*' -not -path './.sam-pr-reviewer/*' -not -path './.kiro/*' \
-  -not -name '.git' -not -name '.sam-pr-reviewer' -not -name '.kiro' \
-  -maxdepth 4 | sort > "${REVIEW_DIR}/tree.txt" || true
+git ls-files > "${REVIEW_DIR}/tree.txt"
 
 # --- Build the prompt ---
 PROMPT_FILE=$(mktemp)
