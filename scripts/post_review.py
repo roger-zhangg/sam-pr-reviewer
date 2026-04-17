@@ -254,8 +254,8 @@ def post_review(repo, pr_number, commit_sha, token, review_text):
     print(f"Extracted review length: {len(review_text)} chars")
     print(f"Parsed {len(comments)} comments from review text")
     if not comments:
-        # Show first 500 chars to help debug
-        print(f"Review text preview:\n{review_text[:500]}")
+        print("No issues found. Skipping review post.")
+        return
 
     summary = build_summary(review_text, len(comments))
 
